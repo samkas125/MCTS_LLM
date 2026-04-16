@@ -71,6 +71,20 @@ if ! grep -q "MCTS_LLM" ~/.bashrc 2>/dev/null; then
 fi
 export PYTHONPATH="${REPO_DIR}:${PYTHONPATH:-}"
 
+# --- Redirect HuggingFace/pip caches to network volume (/workspace) ---
+CACHE_ROOT="/workspace/.cache"
+mkdir -p "${CACHE_ROOT}/huggingface/datasets"
+if ! grep -q "HF_HOME" ~/.bashrc 2>/dev/null; then
+    echo "export HF_HOME=${CACHE_ROOT}/huggingface" >> ~/.bashrc
+    echo "export HF_DATASETS_CACHE=${CACHE_ROOT}/huggingface/datasets" >> ~/.bashrc
+    echo "export TRANSFORMERS_CACHE=${CACHE_ROOT}/huggingface/transformers" >> ~/.bashrc
+    echo "export PIP_CACHE_DIR=${CACHE_ROOT}/pip" >> ~/.bashrc
+fi
+export HF_HOME="${CACHE_ROOT}/huggingface"
+export HF_DATASETS_CACHE="${CACHE_ROOT}/huggingface/datasets"
+export TRANSFORMERS_CACHE="${CACHE_ROOT}/huggingface/transformers"
+export PIP_CACHE_DIR="${CACHE_ROOT}/pip"
+
 # --- Download and preprocess data ---
 echo "=== Downloading and preprocessing datasets ==="
 make setup-data
