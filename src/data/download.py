@@ -26,7 +26,7 @@ def download_math(output_dir: str | Path) -> dict:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    ds = load_dataset("hendrycks/competition_math")
+    ds = load_dataset("lighteval/MATH", "all")
     ds.save_to_disk(str(output_dir / "math"))
     return ds
 
