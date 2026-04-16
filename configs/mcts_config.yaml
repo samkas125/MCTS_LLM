@@ -1,0 +1,35 @@
+# MCTS hyperparameters
+mcts:
+  num_rollouts: 8                # Rollouts per problem
+  num_candidates: 4              # k candidates per expansion
+  exploration_constant: 1.414    # c in UCT formula
+  max_depth: 10                  # Max reasoning steps per trajectory
+  temperature: 0.7               # Temperature for expansion sampling
+  rollout_temperature: 0.8       # Temperature for simulation rollouts
+  top_k_trajectories: 2          # Extract top-k trajectories per problem
+
+# Adaptive compute allocation
+adaptive:
+  enabled: true
+  easy_rollouts: 2               # Rollouts for easy problems (solve rate > 0.7)
+  hard_rollouts: 16              # Rollouts for hard problems (solve rate < 0.3)
+  easy_threshold: 0.7
+  hard_threshold: 0.3
+
+# Code execution sandbox
+sandbox:
+  timeout_seconds: 10
+  max_output_chars: 5000
+  max_memory_mb: 512
+
+# vLLM inference settings for MCTS
+inference:
+  base_url: "http://localhost:8000/v1"
+  model: "Qwen/Qwen2.5-Math-1.5B"
+  max_concurrent: 64
+  max_tokens_per_step: 512
+
+# Data
+data:
+  train_subset_size: 15000       # Combined GSM8K + MATH problems
+  output_dir: "data/mcts_traces"

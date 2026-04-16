@@ -1,0 +1,12 @@
+# vLLM server configuration
+server:
+  model: "Qwen/Qwen2.5-Math-1.5B"
+  host: "0.0.0.0"
+  port: 8000
+  dtype: "bfloat16"
+  tensor_parallel_size: 1
+  gpu_memory_utilization: 0.9
+  max_model_len: 4096
+  max_num_seqs: 128
+  seed: 42
+  enable_prefix_caching: true

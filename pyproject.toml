@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=75.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "mcts-llm"
+version = "0.1.0"
+description = "MCTS-guided reasoning trace synthesis for LLM self-improvement via GRPO"
+requires-python = ">=3.10"
+dependencies = [
+    # Core ML
+    "torch>=2.4.0",
+    "transformers>=4.53.0",
+    "trl[vllm]>=1.0.0",
+    "peft>=0.14.0",
+    "bitsandbytes>=0.45.0",
+    "accelerate>=1.4.0",
+    "vllm>=0.8.5",
+    # Data & evaluation
+    "datasets>=3.0.0",
+    "math-verify>=0.8.0",
+    "sympy>=1.13",
+    # Infrastructure
+    "wandb>=0.19.0",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "openai>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["src*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

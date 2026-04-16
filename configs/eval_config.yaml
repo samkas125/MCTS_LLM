@@ -1,0 +1,22 @@
+# Evaluation settings
+model:
+  name_or_path: "Qwen/Qwen2.5-Math-1.5B"
+
+inference:
+  temperature: 0.0               # Greedy decoding for eval
+  max_tokens: 1024
+  top_p: 1.0
+  gpu_memory_utilization: 0.9
+  max_model_len: 2048
+
+benchmarks:
+  - name: "gsm8k"
+    dataset: "openai/gsm8k"
+    split: "test"
+    answer_format: "gsm8k"       # #### extraction
+  - name: "math500"
+    dataset: "HuggingFaceH4/MATH-500"
+    split: "test"
+    answer_format: "math"        # \boxed{} extraction
+
+output_dir: "outputs/eval_results"
