@@ -46,7 +46,7 @@ eval:
 
 # Full pipeline
 loop:
-	python scripts/run_loop.py
+	python scripts/run_loop.py $(LOOP_ARGS)
 
 ablations:
 	python scripts/run_ablations.py
