@@ -36,23 +36,20 @@ def evaluate_model(
     max_tokens: int = 1024,
     gpu_memory_utilization: float = 0.9,
     max_model_len: int = 2048,
+    vllm_base_url: str | None = None,
 ) -> dict:
     """Evaluate a model on GSM8K test and/or MATH-500.
 
-    Uses vLLM for fast batch inference with greedy decoding.
-
     Args:
         model_path: HuggingFace model ID or local checkpoint path.
-        gsm8k_test: Preprocessed GSM8K test dataset.
-        math500_test: Preprocessed MATH-500 test dataset.
-        temperature: 0.0 for greedy eval.
-        max_tokens: Max tokens per completion.
-        gpu_memory_utilization: vLLM GPU memory fraction.
-        max_model_len: Max model context length.
-
-    Returns:
-        Dict with per-benchmark accuracy and breakdowns.
+        vllm_base_url: If provided, use an already-running vLLM API server
+                       instead of loading the model in-process.
     """
+    if vllm_base_url:
+        return _evaluate_via_api(
+            model_path, gsm8k_test, math500_test, temperature, max_tokens, vllm_base_url
+        )
+
     from vllm import LLM, SamplingParams
 
     vllm_path = _resolve_vllm_model_path(model_path)
@@ -72,21 +69,76 @@ def evaluate_model(
     )
 
     results = {}
-
     if gsm8k_test is not None:
         logger.info(f"Evaluating on GSM8K test ({len(gsm8k_test)} examples)")
-        results["gsm8k"] = _evaluate_dataset(
-            llm, gsm8k_test, sampling_params, "gsm8k"
-        )
+        results["gsm8k"] = _evaluate_dataset(llm, gsm8k_test, sampling_params, "gsm8k")
         logger.info(f"GSM8K accuracy: {results['gsm8k']['accuracy']:.4f}")
-
     if math500_test is not None:
         logger.info(f"Evaluating on MATH-500 ({len(math500_test)} examples)")
-        results["math500"] = _evaluate_dataset(
-            llm, math500_test, sampling_params, "math"
-        )
+        results["math500"] = _evaluate_dataset(llm, math500_test, sampling_params, "math")
         logger.info(f"MATH-500 accuracy: {results['math500']['accuracy']:.4f}")
+    return results
 
+
+def _evaluate_via_api(
+    model_path: str,
+    gsm8k_test: Dataset | None,
+    math500_test: Dataset | None,
+    temperature: float,
+    max_tokens: int,
+    base_url: str,
+) -> dict:
+    """Evaluate using an already-running vLLM OpenAI-compatible server."""
+    import asyncio
+    from openai import AsyncOpenAI
+
+    vllm_model = _resolve_vllm_model_path(model_path)
+    client = AsyncOpenAI(base_url=base_url, api_key="dummy")
+    logger.info(f"Evaluating via API server ({base_url}) model={vllm_model}")
+
+    async def generate_batch(dataset: Dataset) -> list[str]:
+        tokenizer = None
+        try:
+            from transformers import AutoTokenizer
+            tokenizer = AutoTokenizer.from_pretrained(vllm_model)
+        except Exception:
+            pass
+
+        async def single(example):
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT_COT},
+                {"role": "user", "content": example["problem"]},
+            ]
+            try:
+                resp = await client.chat.completions.create(
+                    model=vllm_model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return resp.choices[0].message.content or ""
+            except Exception:
+                return ""
+
+        return await asyncio.gather(*[single(dataset[i]) for i in range(len(dataset))])
+
+    results = {}
+    for name, dataset, source in [
+        ("gsm8k", gsm8k_test, "gsm8k"),
+        ("math500", math500_test, "math"),
+    ]:
+        if dataset is None:
+            continue
+        logger.info(f"Evaluating on {name} ({len(dataset)} examples)")
+        outputs = asyncio.run(generate_batch(dataset))
+        correct, total = 0, len(dataset)
+        for i, generated in enumerate(outputs):
+            predicted = extract_answer(generated, source=source)
+            if predicted and check_answer_equivalence(predicted, dataset[i]["solution"]):
+                correct += 1
+        accuracy = correct / total if total > 0 else 0.0
+        logger.info(f"{name} accuracy: {accuracy:.4f}")
+        results[name] = {"accuracy": accuracy, "correct": correct, "total": total}
     return results
 
 

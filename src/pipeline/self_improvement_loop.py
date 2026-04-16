@@ -70,7 +70,7 @@ def _resolve_model_path(model_path: str) -> str:
     return model_path
 
 
-def _start_vllm_server(model_path: str, timeout: int = 300) -> None:
+def _start_vllm_server(model_path: str, timeout: int = 600) -> None:
     global _vllm_proc
     model_path = _resolve_model_path(model_path)
     console.print(f"[yellow]Starting vLLM server with {model_path}...[/yellow]")
@@ -83,15 +83,23 @@ def _start_vllm_server(model_path: str, timeout: int = 300) -> None:
     )
     _vllm_proc = subprocess.Popen(shlex.split(cmd))
     deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            r = httpx.get(VLLM_URL, timeout=5)
-            if r.status_code == 200:
-                console.print("[green]vLLM server ready.[/green]")
-                return
-        except Exception:
-            pass
-        time.sleep(5)
+    start = time.time()
+    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+        task = progress.add_task("Waiting for vLLM server (loading weights + CUDA graph capture)...", total=None)
+        while time.time() < deadline:
+            try:
+                r = httpx.get(VLLM_URL, timeout=5)
+                if r.status_code == 200:
+                    elapsed = int(time.time() - start)
+                    progress.update(task, description=f"vLLM server ready ({elapsed}s)")
+                    progress.stop()
+                    console.print("[green]vLLM server ready.[/green]")
+                    return
+            except Exception:
+                pass
+            elapsed = int(time.time() - start)
+            progress.update(task, description=f"Waiting for vLLM server ({elapsed}s elapsed — loading weights + CUDA graphs)...")
+            time.sleep(5)
     raise RuntimeError("vLLM server failed to start within timeout")
 
 
@@ -149,19 +157,19 @@ class SelfImprovementLoop:
             else:
                 train_problems = full_train
 
-            # Phase 1: Evaluate current model
-            console.print("[yellow]Phase 1: Pre-training evaluation[/yellow]")
-            pre_results = evaluate_model(
-                self.current_model, gsm8k_test, math500_test
-            )
-
-            # Phase 2: MCTS data generation (needs vLLM server)
-            console.print("[yellow]Phase 2: MCTS data generation[/yellow]")
+            # Start vLLM server once — shared by pre-eval + MCTS
             _start_vllm_server(self.current_model)
             try:
-                mcts_traces = await self._run_mcts_phase(
-                    train_problems, round_num
+                # Phase 1: Evaluate current model (reuses running server)
+                console.print("[yellow]Phase 1: Pre-training evaluation[/yellow]")
+                pre_results = evaluate_model(
+                    self.current_model, gsm8k_test, math500_test,
+                    vllm_base_url=self.vllm_base_url,
                 )
+
+                # Phase 2: MCTS data generation
+                console.print("[yellow]Phase 2: MCTS data generation[/yellow]")
+                mcts_traces = await self._run_mcts_phase(train_problems, round_num)
             finally:
                 _stop_vllm_server()
 
@@ -171,11 +179,16 @@ class SelfImprovementLoop:
                 train_problems, mcts_traces, round_num
             )
 
-            # Phase 4: Evaluate trained model
+            # Phase 4: Evaluate trained model (start server with new model)
             console.print("[yellow]Phase 4: Post-training evaluation[/yellow]")
-            post_results = evaluate_model(
-                new_model_path, gsm8k_test, math500_test
-            )
+            _start_vllm_server(new_model_path)
+            try:
+                post_results = evaluate_model(
+                    new_model_path, gsm8k_test, math500_test,
+                    vllm_base_url=self.vllm_base_url,
+                )
+            finally:
+                _stop_vllm_server()
 
             # Log results
             round_log = {
