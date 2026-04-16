@@ -13,8 +13,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import shlex
+import signal
+import subprocess
+import time
 from pathlib import Path
 
+import httpx
 from datasets import Dataset
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -32,6 +37,50 @@ from src.training.grpo_runner import run_grpo_training
 
 logger = logging.getLogger(__name__)
 console = Console()
+
+VLLM_URL = "http://localhost:8000/health"
+_vllm_proc: subprocess.Popen | None = None
+
+
+def _stop_vllm_server() -> None:
+    global _vllm_proc
+    if _vllm_proc is not None:
+        console.print("[yellow]Stopping vLLM server...[/yellow]")
+        _vllm_proc.send_signal(signal.SIGTERM)
+        try:
+            _vllm_proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            _vllm_proc.kill()
+        _vllm_proc = None
+    # Also kill any stray vLLM processes
+    subprocess.run(
+        ["pkill", "-f", "vllm.entrypoints"], check=False, capture_output=True
+    )
+    time.sleep(2)
+
+
+def _start_vllm_server(model_path: str, timeout: int = 300) -> None:
+    global _vllm_proc
+    console.print(f"[yellow]Starting vLLM server with {model_path}...[/yellow]")
+    cmd = (
+        f"python -m vllm.entrypoints.openai.api_server "
+        f"--model {shlex.quote(model_path)} "
+        f"--host 0.0.0.0 --port 8000 "
+        f"--gpu-memory-utilization 0.9 --max-model-len 4096 "
+        f"--dtype bfloat16 --seed 42 --enable-prefix-caching --max-num-seqs 128"
+    )
+    _vllm_proc = subprocess.Popen(shlex.split(cmd))
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            r = httpx.get(VLLM_URL, timeout=5)
+            if r.status_code == 200:
+                console.print("[green]vLLM server ready.[/green]")
+                return
+        except Exception:
+            pass
+        time.sleep(5)
+    raise RuntimeError("vLLM server failed to start within timeout")
 
 
 class SelfImprovementLoop:
@@ -94,13 +143,17 @@ class SelfImprovementLoop:
                 self.current_model, gsm8k_test, math500_test
             )
 
-            # Phase 2: MCTS data generation
+            # Phase 2: MCTS data generation (needs vLLM server)
             console.print("[yellow]Phase 2: MCTS data generation[/yellow]")
-            mcts_traces = await self._run_mcts_phase(
-                train_problems, round_num
-            )
+            _start_vllm_server(self.current_model)
+            try:
+                mcts_traces = await self._run_mcts_phase(
+                    train_problems, round_num
+                )
+            finally:
+                _stop_vllm_server()
 
-            # Phase 3: GRPO training
+            # Phase 3: GRPO training (needs GPU free — vLLM must be stopped)
             console.print("[yellow]Phase 3: GRPO training[/yellow]")
             new_model_path = self._run_grpo_phase(
                 train_problems, mcts_traces, round_num
