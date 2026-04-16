@@ -25,9 +25,9 @@ sandbox:
 # vLLM inference settings for MCTS
 inference:
   base_url: "http://localhost:8000/v1"
-  model: "Qwen/Qwen2.5-Math-1.5B"
+  model: "Qwen/Qwen2.5-Math-7B"
   max_concurrent: 64
-  max_tokens_per_step: 256
+  max_tokens_per_step: 512
 
 # Data
 data:

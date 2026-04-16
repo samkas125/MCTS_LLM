@@ -20,7 +20,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run self-improvement loop")
     parser.add_argument(
         "--model",
-        default="Qwen/Qwen2.5-Math-1.5B",
+        default="Qwen/Qwen2.5-Math-7B",
         help="Base model",
     )
     parser.add_argument("--num-rounds", type=int, default=3)
@@ -30,8 +30,8 @@ def main():
     parser.add_argument("--vllm-url", default="http://localhost:8000/v1")
     parser.add_argument("--mcts-rollouts", type=int, default=8)
     parser.add_argument("--mcts-candidates", type=int, default=4)
-    parser.add_argument("--problems-per-round", type=int, default=500,
-                        help="Problems to run MCTS on per round (default: 500 for ~2hr cycles)")
+    parser.add_argument("--problems-per-round", type=int, default=100,
+                        help="Problems to run MCTS on per round")
     parser.add_argument("--round", type=int, default=None, help="Run only this round")
 
     args = parser.parse_args()

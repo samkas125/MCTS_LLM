@@ -19,6 +19,8 @@ class QValueRewardFunction:
     encoding the MCTS tree's judgment about problem difficulty and solution quality.
     """
 
+    __name__ = "qvalue_reward"
+
     def __init__(
         self,
         mcts_data: dict[str, dict],

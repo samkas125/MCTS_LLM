@@ -36,7 +36,7 @@ mcts:
 	python scripts/run_mcts.py
 
 grpo:
-	python scripts/run_grpo.py --max-problems 500
+	python scripts/run_grpo.py --max-problems 100
 
 sft:
 	python scripts/run_sft.py
