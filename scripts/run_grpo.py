@@ -41,6 +41,8 @@ def main():
     )
     parser.add_argument("--output-dir", default="outputs/checkpoints")
     parser.add_argument("--round", type=int, default=0)
+    parser.add_argument("--max-problems", type=int, default=500,
+                        help="Max training problems per round (default: 500 for ~30min GRPO)")
 
     args = parser.parse_args()
 
@@ -49,6 +51,9 @@ def main():
         problems = load_dataset("json", data_files=args.dataset, split="train")
     else:
         problems = load_from_disk(args.dataset)
+
+    if args.max_problems and args.max_problems < len(problems):
+        problems = problems.select(range(args.max_problems))
     train_dataset = prepare_grpo_dataset(problems)
 
     # Build reward functions
