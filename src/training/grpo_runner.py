@@ -77,7 +77,6 @@ def run_grpo_training(
         # Generation
         num_generations=cfg["grpo"]["num_generations"],
         max_completion_length=cfg["grpo"]["max_completion_length"],
-        max_prompt_length=cfg["grpo"]["max_prompt_length"],
         temperature=cfg["grpo"]["temperature"],
         # vLLM
         use_vllm=cfg["vllm"]["use_vllm"],
