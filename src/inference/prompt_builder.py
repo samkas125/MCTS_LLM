@@ -9,20 +9,19 @@ SYSTEM_PROMPT_TIR = (
     "and put your final answer within \\boxed{}."
 )
 
+SYSTEM_PROMPT_MCTS = (
+    "Solve math problems one step at a time. "
+    "Each reply is ONE step only — do not jump to the final answer."
+)
+
 STEP_INSTRUCTION = (
-    "Write the next reasoning step. Include:\n"
-    "1. A clear explanation in natural language\n"
-    "2. Python code that verifies or computes the result\n"
-    "Format:\n"
-    "Step {step_num}: <explanation>\n"
-    "```python\n<code>\n```\n"
-    "Result: <describe what the code shows>\n"
+    "Step {step_num}: write the next single reasoning step. "
+    "Do NOT include \\boxed{{}} yet.\n"
 )
 
 FINAL_STEP_INSTRUCTION = (
-    "If you have enough information to give the final answer, "
-    "provide it now within \\boxed{{}}. "
-    "Otherwise, write the next reasoning step with code.\n"
+    "Continue reasoning, or if you have enough to conclude, "
+    "give the final answer as \\boxed{{<answer>}}.\n"
 )
 
 
@@ -30,7 +29,7 @@ def build_expansion_prompt(
     problem: str,
     trajectory_so_far: str,
     step_num: int,
-    mode: str = "tir",
+    allow_final_answer: bool = False,
 ) -> list[dict]:
     """Build prompt for MCTS expansion (generating a next reasoning step).
 
@@ -38,23 +37,22 @@ def build_expansion_prompt(
         problem: The math problem text
         trajectory_so_far: Concatenated text of all steps so far
         step_num: Current step number (1-indexed)
-        mode: "tir" for code-augmented CoT, "cot" for plain CoT
+        allow_final_answer: If True, permit \\boxed{} final answer in this step
 
     Returns:
         Conversational format messages list
     """
-    system = SYSTEM_PROMPT_TIR if mode == "tir" else SYSTEM_PROMPT_COT
-
     user_content = problem + "\n\n"
     if trajectory_so_far:
         user_content += f"Progress so far:\n{trajectory_so_far}\n\n"
-    user_content += STEP_INSTRUCTION.format(step_num=step_num)
 
-    if step_num >= 3:
-        user_content += "\n" + FINAL_STEP_INSTRUCTION
+    if allow_final_answer:
+        user_content += FINAL_STEP_INSTRUCTION
+    else:
+        user_content += STEP_INSTRUCTION.format(step_num=step_num)
 
     return [
-        {"role": "system", "content": system},
+        {"role": "system", "content": SYSTEM_PROMPT_MCTS},
         {"role": "user", "content": user_content},
     ]
 

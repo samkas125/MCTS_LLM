@@ -103,8 +103,11 @@ async def expand_node(
     """
     trajectory_so_far = node.get_trajectory_text()
     step_num = node.depth + 1
+    allow_final = node.depth >= 2
 
-    prompt = build_expansion_prompt(problem, trajectory_so_far, step_num)
+    prompt = build_expansion_prompt(
+        problem, trajectory_so_far, step_num, allow_final_answer=allow_final
+    )
 
     # Generate k candidates
     completions = await vllm_client.generate_n_for_prompt(
@@ -144,7 +147,6 @@ async def expand_node(
         if is_duplicate:
             continue
 
-        # Check if this step contains a final answer
         is_terminal, final_answer = check_terminal(completion)
 
         child = MCTSNode(
