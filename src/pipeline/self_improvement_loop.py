@@ -25,7 +25,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from src.data.mcts_dataset import save_mcts_traces
-from src.evaluation.evaluator import evaluate_model, save_eval_results
+from src.evaluation.evaluator import async_evaluate_model, evaluate_model, save_eval_results
 from src.evaluation.metrics import compute_improvement, format_results_table
 from src.inference.vllm_client import VLLMClient
 from src.mcts.tree import MCTSConfig, MCTSTree
@@ -164,7 +164,7 @@ class SelfImprovementLoop:
             try:
                 # Phase 1: Evaluate current model (reuses running server)
                 console.print("[yellow]Phase 1: Pre-training evaluation[/yellow]")
-                pre_results = evaluate_model(
+                pre_results = await async_evaluate_model(
                     self.current_model, gsm8k_test, math500_test,
                     vllm_base_url=self.vllm_base_url,
                 )
@@ -185,7 +185,7 @@ class SelfImprovementLoop:
             console.print("[yellow]Phase 4: Post-training evaluation[/yellow]")
             _start_vllm_server(new_model_path)
             try:
-                post_results = evaluate_model(
+                post_results = await async_evaluate_model(
                     new_model_path, gsm8k_test, math500_test,
                     vllm_base_url=self.vllm_base_url,
                 )

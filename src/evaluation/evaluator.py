@@ -46,9 +46,10 @@ def evaluate_model(
                        instead of loading the model in-process.
     """
     if vllm_base_url:
-        return _evaluate_via_api(
+        import asyncio
+        return asyncio.run(_evaluate_via_api(
             model_path, gsm8k_test, math500_test, temperature, max_tokens, vllm_base_url
-        )
+        ))
 
     from vllm import LLM, SamplingParams
 
@@ -80,7 +81,21 @@ def evaluate_model(
     return results
 
 
-def _evaluate_via_api(
+async def async_evaluate_model(
+    model_path: str,
+    gsm8k_test,
+    math500_test,
+    temperature: float = 0.0,
+    max_tokens: int = 1024,
+    vllm_base_url: str = "http://localhost:8000/v1",
+) -> dict:
+    """Async version of evaluate_model for use inside a running event loop."""
+    return await _evaluate_via_api(
+        model_path, gsm8k_test, math500_test, temperature, max_tokens, vllm_base_url
+    )
+
+
+async def _evaluate_via_api(
     model_path: str,
     gsm8k_test: Dataset | None,
     math500_test: Dataset | None,
@@ -130,7 +145,7 @@ def _evaluate_via_api(
         if dataset is None:
             continue
         logger.info(f"Evaluating on {name} ({len(dataset)} examples)")
-        outputs = asyncio.run(generate_batch(dataset))
+        outputs = await generate_batch(dataset)
         correct, total = 0, len(dataset)
         for i, generated in enumerate(outputs):
             predicted = extract_answer(generated, source=source)
