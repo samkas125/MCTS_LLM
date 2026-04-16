@@ -137,26 +137,27 @@ def preprocess_all(raw_dir: str | Path, processed_dir: str | Path) -> dict:
 
     # Load raw datasets
     gsm8k = load_from_disk(str(raw_dir / "gsm8k"))
-    math_ds = load_from_disk(str(raw_dir / "math"))
-    math500 = load_from_disk(str(raw_dir / "math500"))
 
     # Preprocess
     gsm8k_train = preprocess_gsm8k(gsm8k["train"])
     gsm8k_test = preprocess_gsm8k(gsm8k["test"])
-    math_train = preprocess_math(math_ds["train"])
-    math500_test = preprocess_math500(math500["test"])
 
-    # Combined training set
-    train_combined = create_combined_training_set(gsm8k_train, math_train)
+    # Use GSM8K as the combined training set (MATH dataset unavailable)
+    train_combined = gsm8k_train
 
     # Save
     result = {
         "gsm8k_train": gsm8k_train,
         "gsm8k_test": gsm8k_test,
-        "math_train": math_train,
-        "math500_test": math500_test,
         "train_combined": train_combined,
     }
+
+    # Load MATH-500 if available
+    math500_path = raw_dir / "math500"
+    if math500_path.exists():
+        math500 = load_from_disk(str(math500_path))
+        math500_test = preprocess_math500(math500["test"])
+        result["math500_test"] = math500_test
 
     for name, ds in result.items():
         ds.save_to_disk(str(processed_dir / name))
