@@ -222,7 +222,7 @@ class SelfImprovementLoop:
         """
         vllm_client = VLLMClient(
             base_url=self.vllm_base_url,
-            model=self.current_model,
+            model=_resolve_model_path(self.current_model),
         )
 
         all_trajectories = {}
