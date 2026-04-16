@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 from pathlib import Path
@@ -9,7 +10,7 @@ from pathlib import Path
 import torch
 import yaml
 from datasets import Dataset
-from peft import LoraConfig
+from peft import LoraConfig, PeftModel
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainerCallback
 from trl import GRPOConfig, GRPOTrainer
 
@@ -137,15 +138,30 @@ def run_grpo_training(
         save_total_limit=1,
     )
 
-    # Load model with quantization
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name_or_path,
-        quantization_config=bnb_config,
-        dtype=torch.bfloat16,
-        device_map="auto",
-    )
+    # Load model — handle both full models and LoRA adapter checkpoints
+    adapter_cfg_path = Path(model_name_or_path) / "adapter_config.json"
+    is_adapter = adapter_cfg_path.exists()
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+    if is_adapter:
+        with open(adapter_cfg_path) as f:
+            base_model_name = json.load(f)["base_model_name_or_path"]
+        logger.info(f"Detected LoRA adapter. Base model: {base_model_name}")
+        base_model = AutoModelForCausalLM.from_pretrained(
+            base_model_name,
+            quantization_config=bnb_config,
+            device_map="auto",
+        )
+        model = PeftModel.from_pretrained(base_model, model_name_or_path)
+        tokenizer = AutoTokenizer.from_pretrained(base_model_name)
+    else:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name_or_path,
+            quantization_config=bnb_config,
+            dtype=torch.bfloat16,
+            device_map="auto",
+        )
+        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
@@ -153,14 +169,14 @@ def run_grpo_training(
     best_model_path = str(Path(output_dir) / "best_model")
     best_callback = BestModelCallback(best_model_path)
 
-    # Create trainer
+    # Create trainer — skip peft_config if model already has LoRA loaded
     trainer = GRPOTrainer(
         model=model,
         args=training_args,
         reward_funcs=reward_funcs,
         train_dataset=train_dataset,
         eval_dataset=eval_dataset,
-        peft_config=peft_config,
+        peft_config=None if is_adapter else peft_config,
         processing_class=tokenizer,
         callbacks=[best_callback],
     )
@@ -168,10 +184,12 @@ def run_grpo_training(
     # Train
     trainer.train()
 
-    # Save final checkpoint
+    # Merge LoRA into base weights and save a full model (needed for vLLM next round)
     final_path = str(Path(run_output_dir) / "final")
-    trainer.save_model(final_path)
+    logger.info("Merging LoRA adapter into base model...")
+    merged = trainer.model.merge_and_unload()
+    merged.save_pretrained(final_path)
     tokenizer.save_pretrained(final_path)
 
-    logger.info(f"GRPO round {round_num} complete. Model saved to {final_path}")
+    logger.info(f"GRPO round {round_num} complete. Merged model saved to {final_path}")
     return final_path
