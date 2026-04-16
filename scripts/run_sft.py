@@ -3,7 +3,7 @@
 import argparse
 import logging
 
-from datasets import load_from_disk
+from datasets import load_dataset, load_from_disk
 from rich.logging import RichHandler
 
 from src.data.mcts_dataset import load_mcts_traces
@@ -27,7 +27,7 @@ def main():
     )
     parser.add_argument(
         "--dataset",
-        default="data/processed/train_combined",
+        default="data/processed/train_combined.jsonl",
         help="Preprocessed training dataset",
     )
     parser.add_argument(
@@ -43,8 +43,11 @@ def main():
 
     args = parser.parse_args()
 
-    # Load data
-    problems = load_from_disk(args.dataset)
+    # Load data (supports both Arrow directories and JSONL files)
+    if args.dataset.endswith(".jsonl") or args.dataset.endswith(".json"):
+        problems = load_dataset("json", data_files=args.dataset, split="train")
+    else:
+        problems = load_from_disk(args.dataset)
     mcts_traces = load_mcts_traces(args.mcts_traces)
     train_dataset = prepare_sft_dataset(problems, mcts_traces)
 

@@ -4,7 +4,7 @@ import argparse
 import json
 import logging
 
-from datasets import load_from_disk
+from datasets import load_dataset, load_from_disk
 from rich.logging import RichHandler
 
 from src.evaluation.evaluator import evaluate_model, save_eval_results
@@ -26,12 +26,12 @@ def main():
     )
     parser.add_argument(
         "--gsm8k-test",
-        default="data/processed/gsm8k_test",
+        default="data/processed/gsm8k_test.jsonl",
         help="Path to preprocessed GSM8K test set",
     )
     parser.add_argument(
         "--math500-test",
-        default="data/processed/math500_test",
+        default="data/processed/math500_test.jsonl",
         help="Path to preprocessed MATH-500 test set",
     )
     parser.add_argument("--output-dir", default="outputs/eval_results")
@@ -41,8 +41,13 @@ def main():
 
     args = parser.parse_args()
 
-    gsm8k_test = load_from_disk(args.gsm8k_test)
-    math500_test = load_from_disk(args.math500_test)
+    def _load(path):
+        if path.endswith(".jsonl") or path.endswith(".json"):
+            return load_dataset("json", data_files=path, split="train")
+        return load_from_disk(path)
+
+    gsm8k_test = _load(args.gsm8k_test)
+    math500_test = _load(args.math500_test) if args.math500_test else None
 
     results = evaluate_model(
         model_path=args.model,
