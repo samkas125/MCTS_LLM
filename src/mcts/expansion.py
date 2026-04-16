@@ -131,6 +131,19 @@ async def expand_node(
                 continue  # Filter out failed code executions
         # If no code, the step is pure reasoning — still valid
 
+        # Deduplicate: skip if this candidate is equivalent to one already accepted
+        # in this expansion. Check (1) same execution output, (2) exact same text.
+        is_duplicate = False
+        for existing in children:
+            if code_output and existing.code_output and code_output == existing.code_output:
+                is_duplicate = True
+                break
+            if step_text.strip() == existing.step_text.strip():
+                is_duplicate = True
+                break
+        if is_duplicate:
+            continue
+
         # Check if this step contains a final answer
         is_terminal, final_answer = check_terminal(completion)
 
