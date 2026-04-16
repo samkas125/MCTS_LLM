@@ -59,8 +59,20 @@ def _stop_vllm_server() -> None:
     time.sleep(2)
 
 
+def _resolve_model_path(model_path: str) -> str:
+    """Resolve LoRA adapter checkpoint to its base model for vLLM."""
+    adapter_cfg = Path(model_path) / "adapter_config.json"
+    if adapter_cfg.exists():
+        with open(adapter_cfg) as f:
+            base = json.load(f)["base_model_name_or_path"]
+        console.print(f"[dim]Adapter detected — using base model {base} for vLLM[/dim]")
+        return base
+    return model_path
+
+
 def _start_vllm_server(model_path: str, timeout: int = 300) -> None:
     global _vllm_proc
+    model_path = _resolve_model_path(model_path)
     console.print(f"[yellow]Starting vLLM server with {model_path}...[/yellow]")
     cmd = (
         f"python -m vllm.entrypoints.openai.api_server "
