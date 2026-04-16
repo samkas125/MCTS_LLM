@@ -71,6 +71,6 @@ logging:
 
 # Saving
 saving:
-  save_steps: 200
-  save_total_limit: 3
+  save_steps: 50
+  save_total_limit: 1
   output_dir: "outputs/checkpoints"
