@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datasets import Dataset, load_from_disk
+from pathlib import Path
+
+from datasets import Dataset, load_dataset, load_from_disk
 
 from src.inference.prompt_builder import SYSTEM_PROMPT_COT
 
@@ -71,13 +73,28 @@ def prepare_sft_dataset(
     return Dataset.from_list(records)
 
 
-def load_processed_datasets(processed_dir: str) -> dict[str, Dataset]:
-    """Load all preprocessed datasets from disk.
+def _load_any(path: str) -> Dataset:
+    """Load a dataset from Arrow directory or JSONL file."""
+    p = Path(path)
+    jsonl = Path(str(path) + ".jsonl")
+    if jsonl.exists():
+        return load_dataset("json", data_files=str(jsonl), split="train")
+    if p.exists():
+        return load_from_disk(str(p))
+    raise FileNotFoundError(f"Dataset not found at {path} or {jsonl}")
 
-    Returns dict with keys: train_combined, gsm8k_test, math500_test
+
+def load_processed_datasets(processed_dir: str) -> dict[str, Dataset]:
+    """Load all preprocessed datasets from disk (Arrow or JSONL).
+
+    Returns dict with keys: train_combined, gsm8k_test, math500_test (optional)
     """
-    return {
-        "train_combined": load_from_disk(f"{processed_dir}/train_combined"),
-        "gsm8k_test": load_from_disk(f"{processed_dir}/gsm8k_test"),
-        "math500_test": load_from_disk(f"{processed_dir}/math500_test"),
+    result = {
+        "train_combined": _load_any(f"{processed_dir}/train_combined"),
+        "gsm8k_test": _load_any(f"{processed_dir}/gsm8k_test"),
     }
+    try:
+        result["math500_test"] = _load_any(f"{processed_dir}/math500_test")
+    except FileNotFoundError:
+        result["math500_test"] = None
+    return result

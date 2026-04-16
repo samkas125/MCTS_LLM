@@ -31,5 +31,5 @@ inference:
 
 # Data
 data:
-  train_subset_size: 15000       # Combined GSM8K + MATH problems
+  train_subset_size: 1000        # Problems per round (use subset for faster cycles)
   output_dir: "data/mcts_traces"

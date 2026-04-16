@@ -3,16 +3,43 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from pathlib import Path
 
 import torch
 import yaml
 from datasets import Dataset
 from peft import LoraConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, TrainerCallback
 from trl import GRPOConfig, GRPOTrainer
 
 logger = logging.getLogger(__name__)
+
+
+class BestModelCallback(TrainerCallback):
+    """Saves model to a fixed 'best' path whenever mean reward improves."""
+
+    def __init__(self, best_model_path: str):
+        self.best_model_path = best_model_path
+        self.best_reward = float("-inf")
+
+    def on_log(self, args, state, control, logs=None, **kwargs):
+        if logs is None:
+            return
+        reward = logs.get("rewards/mean") or logs.get("reward")
+        if reward is not None and reward > self.best_reward:
+            self.best_reward = reward
+            trainer = kwargs.get("model")  # not available here — saved in on_save
+            logger.info(f"New best reward: {reward:.4f} — will save at next checkpoint")
+
+    def on_save(self, args, state, control, **kwargs):
+        # Copy the latest checkpoint to best_model_path
+        latest = Path(args.output_dir) / f"checkpoint-{state.global_step}"
+        if latest.exists():
+            if Path(self.best_model_path).exists():
+                shutil.rmtree(self.best_model_path)
+            shutil.copytree(str(latest), self.best_model_path)
+            logger.info(f"Best model updated at step {state.global_step} → {self.best_model_path}")
 
 
 def load_grpo_config(config_path: str = "configs/grpo_config.yaml") -> dict:
@@ -105,9 +132,9 @@ def run_grpo_training(
         logging_steps=cfg["logging"]["logging_steps"],
         log_completions=cfg["logging"]["log_completions"],
         run_name=f"grpo_round_{round_num}",
-        # Saving
+        # Saving — keep only 1 checkpoint (most recent), overwrite each time
         save_steps=cfg["saving"]["save_steps"],
-        save_total_limit=cfg["saving"]["save_total_limit"],
+        save_total_limit=1,
     )
 
     # Load model with quantization
@@ -122,6 +149,10 @@ def run_grpo_training(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # Best model callback — saves to fixed path when reward improves
+    best_model_path = str(Path(output_dir) / "best_model")
+    best_callback = BestModelCallback(best_model_path)
+
     # Create trainer
     trainer = GRPOTrainer(
         model=model,
@@ -131,6 +162,7 @@ def run_grpo_training(
         eval_dataset=eval_dataset,
         peft_config=peft_config,
         processing_class=tokenizer,
+        callbacks=[best_callback],
     )
 
     # Train

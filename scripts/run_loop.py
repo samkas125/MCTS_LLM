@@ -30,6 +30,8 @@ def main():
     parser.add_argument("--vllm-url", default="http://localhost:8000/v1")
     parser.add_argument("--mcts-rollouts", type=int, default=8)
     parser.add_argument("--mcts-candidates", type=int, default=4)
+    parser.add_argument("--problems-per-round", type=int, default=500,
+                        help="Problems to run MCTS on per round (default: 500 for ~2hr cycles)")
     parser.add_argument("--round", type=int, default=None, help="Run only this round")
 
     args = parser.parse_args()
@@ -46,6 +48,7 @@ def main():
         data_dir=args.data_dir,
         output_dir=args.output_dir,
         vllm_base_url=args.vllm_url,
+        problems_per_round=args.problems_per_round,
     )
 
     logger.info(f"Self-improvement loop complete. {len(results)} rounds executed.")

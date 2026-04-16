@@ -46,6 +46,8 @@ class SelfImprovementLoop:
         mcts_config: MCTSConfig | None = None,
         vllm_base_url: str = "http://localhost:8000/v1",
         reward_weights: list[float] | None = None,
+        problems_per_round: int = 500,
+        **kwargs,
     ):
         self.base_model = base_model
         self.current_model = base_model
@@ -55,6 +57,7 @@ class SelfImprovementLoop:
         self.mcts_config = mcts_config or MCTSConfig()
         self.vllm_base_url = vllm_base_url
         self.reward_weights = reward_weights or [1.0, 0.1, 0.5]
+        self.problems_per_round = problems_per_round
         self.results_log: list[dict] = []
 
     async def run(self, start_round: int = 0) -> list[dict]:
@@ -68,13 +71,22 @@ class SelfImprovementLoop:
         """
         # Load datasets
         datasets = load_processed_datasets(str(self.data_dir / "processed"))
-        train_problems = datasets["train_combined"]
+        full_train = datasets["train_combined"]
         gsm8k_test = datasets["gsm8k_test"]
-        math500_test = datasets["math500_test"]
+        math500_test = datasets.get("math500_test")
 
         for round_num in range(start_round, self.num_rounds):
             console.rule(f"[bold blue]Round {round_num}")
             console.print(f"Model: {self.current_model}")
+
+            # Sample a fresh subset each round (different seed per round)
+            if self.problems_per_round and self.problems_per_round < len(full_train):
+                train_problems = full_train.shuffle(seed=round_num * 42).select(
+                    range(self.problems_per_round)
+                )
+                console.print(f"Using {len(train_problems)} problems this round (subset of {len(full_train)})")
+            else:
+                train_problems = full_train
 
             # Phase 1: Evaluate current model
             console.print("[yellow]Phase 1: Pre-training evaluation[/yellow]")
