@@ -14,6 +14,11 @@ from src.rewards.answer_extraction import extract_answer
 
 logger = logging.getLogger(__name__)
 
+# Suppress noisy HTTP request logs from openai/httpx clients
+logging.getLogger("openai").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+
 
 def _resolve_vllm_model_path(model_path: str) -> str:
     """Return a path vLLM can load — resolves LoRA adapters to their base model."""
