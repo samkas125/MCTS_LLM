@@ -15,6 +15,19 @@ from src.rewards.answer_extraction import extract_answer
 logger = logging.getLogger(__name__)
 
 
+def _resolve_vllm_model_path(model_path: str) -> str:
+    """Return a path vLLM can load — resolves LoRA adapters to their base model."""
+    adapter_cfg = Path(model_path) / "adapter_config.json"
+    if adapter_cfg.exists():
+        with open(adapter_cfg) as f:
+            base = json.load(f)["base_model_name_or_path"]
+        logger.warning(
+            f"{model_path} is a LoRA adapter — evaluating base model {base} instead"
+        )
+        return base
+    return model_path
+
+
 def evaluate_model(
     model_path: str,
     gsm8k_test: Dataset | None = None,
@@ -42,9 +55,10 @@ def evaluate_model(
     """
     from vllm import LLM, SamplingParams
 
-    logger.info(f"Loading model for evaluation: {model_path}")
+    vllm_path = _resolve_vllm_model_path(model_path)
+    logger.info(f"Loading model for evaluation: {vllm_path}")
     llm = LLM(
-        model=model_path,
+        model=vllm_path,
         gpu_memory_utilization=gpu_memory_utilization,
         max_model_len=max_model_len,
         dtype="bfloat16",
