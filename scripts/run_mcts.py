@@ -6,7 +6,7 @@ import json
 import logging
 
 import yaml
-from datasets import load_from_disk
+from datasets import load_dataset, load_from_disk
 from rich.logging import RichHandler
 
 from src.data.mcts_dataset import save_mcts_traces
@@ -39,8 +39,11 @@ async def run_mcts(args):
         max_tokens_per_step=cfg["inference"]["max_tokens_per_step"],
     )
 
-    # Load dataset
-    problems = load_from_disk(args.dataset)
+    # Load dataset (supports both Arrow directories and JSONL files)
+    if args.dataset.endswith(".jsonl") or args.dataset.endswith(".json"):
+        problems = load_dataset("json", data_files=args.dataset, split="train")
+    else:
+        problems = load_from_disk(args.dataset)
     if args.max_problems:
         problems = problems.select(range(min(args.max_problems, len(problems))))
 
