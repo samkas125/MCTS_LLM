@@ -1,6 +1,6 @@
 # Data and outputs (large files, generated at runtime)
-data/
-outputs/
+/data/
+/outputs/
 *.pt
 *.bin
 *.safetensors
