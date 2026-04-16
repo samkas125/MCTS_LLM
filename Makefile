@@ -1,6 +1,10 @@
 .PHONY: install test lint vllm-server mcts grpo sft eval loop ablations download-data preprocess setup-data
 
 export PYTHONPATH := $(shell pwd):$(PYTHONPATH)
+export HF_HOME := /workspace/.cache/huggingface
+export HF_DATASETS_CACHE := /workspace/.cache/huggingface/datasets
+export TRANSFORMERS_CACHE := /workspace/.cache/huggingface/transformers
+export PIP_CACHE_DIR := /workspace/.cache/pip
 
 install:
 	pip install "pip==24.3.1" --quiet --disable-pip-version-check
