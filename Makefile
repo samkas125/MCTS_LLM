@@ -1,7 +1,11 @@
-.PHONY: install test lint vllm-server mcts grpo sft eval loop ablations
+.PHONY: install test lint vllm-server mcts grpo sft eval loop ablations download-data preprocess setup-data
+
+export PYTHONPATH := $(shell pwd):$(PYTHONPATH)
 
 install:
-	pip install -e ".[dev]"
+	pip install "pip==24.3.1" --quiet --disable-pip-version-check
+	sed -i 's|setuptools.backends._legacy:_Backend|setuptools.build_meta|g' pyproject.toml || true
+	pip install --no-build-isolation ".[dev]"
 
 test:
 	pytest tests/ -v
@@ -16,6 +20,16 @@ format:
 # vLLM server for MCTS data generation (full GPU)
 vllm-server:
 	bash scripts/start_vllm_server.sh
+
+# Data pipeline
+download-data:
+	python -c "from src.data.download import download_all_datasets; download_all_datasets('data/raw')"
+
+preprocess:
+	python -c "from src.data.preprocess import preprocess_all; preprocess_all('data/raw', 'data/processed')"
+
+# Download + preprocess in one step
+setup-data: download-data preprocess
 
 # Pipeline stages
 mcts:
@@ -36,7 +50,3 @@ loop:
 
 ablations:
 	python scripts/run_ablations.py
-
-# Data
-download-data:
-	python -c "from src.data.download import download_all_datasets; download_all_datasets('data/raw')"

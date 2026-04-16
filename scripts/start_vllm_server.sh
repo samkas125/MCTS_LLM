@@ -11,7 +11,7 @@ python -m vllm.entrypoints.openai.api_server \
     --host 0.0.0.0 \
     --port 8000 \
     --gpu-memory-utilization 0.9 \
-    --max-model-len 8192 \
+    --max-model-len 4096 \
     --dtype bfloat16 \
     --seed 42 \
     --enable-prefix-caching \

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, BadRequestError
 
 
 class VLLMClient:
@@ -47,16 +47,20 @@ class VLLMClient:
             List of n completion strings
         """
         async with self.semaphore:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                top_p=top_p,
-                stop=stop,
-                n=n,
-            )
-            return [choice.message.content for choice in response.choices]
+            try:
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p,
+                    stop=stop,
+                    n=n,
+                )
+                return [choice.message.content for choice in response.choices]
+            except BadRequestError:
+                # Prompt too long for context window — return empty list
+                return []
 
     async def generate_batch(
         self,

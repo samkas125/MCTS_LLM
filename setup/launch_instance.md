@@ -54,7 +54,7 @@ git clone <your-repo-url> MCTS_LLM
 cd MCTS_LLM
 cp .env.example .env
 # Edit .env with your WANDB_API_KEY and HF_TOKEN
-bash aws/setup.sh
+bash setup/setup.sh
 
 # 4. Use tmux for long-running jobs
 tmux new -s training

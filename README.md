@@ -53,7 +53,7 @@ MCTS_LLM/
 │   └── data/           # Dataset download, preprocessing, curriculum
 ├── scripts/            # Entry-point scripts (run_mcts, run_grpo, run_eval, etc.)
 ├── configs/            # YAML configs for MCTS, GRPO, SFT, eval, vLLM
-├── aws/                # AWS setup scripts and instance guide
+├── setup/                # AWS setup scripts and instance guide
 ├── tests/              # Unit + integration tests (77 tests, all passing)
 └── docs/               # Detailed implementation plan
 ```
@@ -140,7 +140,7 @@ nano .env   # Fill in HF_TOKEN, WANDB_API_KEY, S3_BUCKET
 This installs all dependencies, authenticates HuggingFace and wandb, and creates the required directories.
 
 ```bash
-bash aws/setup.sh
+bash setup/setup.sh
 source .venv/bin/activate
 ```
 
@@ -243,8 +243,8 @@ The spot training script handles automatic checkpointing to S3 on interruption:
 
 ```bash
 # On your instance:
-bash aws/spot_training.sh 0   # Run round 0
-bash aws/spot_training.sh 1   # Run round 1 (downloads round 0 results from S3 first)
+bash setup/spot_training.sh 0   # Run round 0
+bash setup/spot_training.sh 1   # Run round 1 (downloads round 0 results from S3 first)
 ```
 
 If your spot instance is interrupted mid-training, just launch a new instance and re-run the same command — it will resume from the last S3 checkpoint.

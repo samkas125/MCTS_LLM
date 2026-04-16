@@ -1,9 +1,12 @@
-"""Preprocess GSM8K and MATH datasets into unified format for MCTS and GRPO."""
+"""Preprocess GSM8K and MATH datasets into unified format for MCTS and GRPO.
+
+Reads/writes JSONL to avoid Arrow save_to_disk deadlocks on some systems.
+"""
 
 import re
 from pathlib import Path
 
-from datasets import Dataset, DatasetDict, concatenate_datasets, load_from_disk
+from datasets import Dataset, load_dataset
 
 
 def extract_gsm8k_answer(answer_text: str) -> str:
@@ -37,11 +40,7 @@ def extract_boxed_answer(solution_text: str) -> str:
 
 
 def preprocess_gsm8k(dataset: Dataset) -> Dataset:
-    """Convert GSM8K split to unified format.
-
-    Returns Dataset with columns:
-        problem_id, problem, solution, source, level, subject, difficulty
-    """
+    """Convert GSM8K split to unified format."""
 
     def process(example, idx):
         return {
@@ -52,31 +51,6 @@ def preprocess_gsm8k(dataset: Dataset) -> Dataset:
             "level": 0,
             "subject": "arithmetic",
             "difficulty": 0.0,
-        }
-
-    return dataset.map(process, with_indices=True, remove_columns=dataset.column_names)
-
-
-def preprocess_math(dataset: Dataset) -> Dataset:
-    """Convert MATH split to unified format.
-
-    Returns Dataset with columns:
-        problem_id, problem, solution, source, level, subject, difficulty
-    """
-
-    def process(example, idx):
-        level_str = example.get("level", "Level 1")
-        level_match = re.search(r"(\d+)", level_str)
-        level = int(level_match.group(1)) if level_match else 1
-
-        return {
-            "problem_id": f"math_{idx}",
-            "problem": example["problem"],
-            "solution": extract_boxed_answer(example["solution"]),
-            "source": "math",
-            "level": level,
-            "subject": example.get("type", "unknown"),
-            "difficulty": level / 5.0,
         }
 
     return dataset.map(process, with_indices=True, remove_columns=dataset.column_names)
@@ -104,66 +78,37 @@ def preprocess_math500(dataset: Dataset) -> Dataset:
     return dataset.map(process, with_indices=True, remove_columns=dataset.column_names)
 
 
-def create_combined_training_set(
-    gsm8k_train: Dataset,
-    math_train: Dataset,
-    max_size: int | None = None,
-    seed: int = 42,
-) -> Dataset:
-    """Combine GSM8K and MATH training sets.
-
-    Args:
-        gsm8k_train: Preprocessed GSM8K training split.
-        math_train: Preprocessed MATH training split.
-        max_size: If set, subsample to this size (proportionally).
-        seed: Random seed for subsampling.
-    """
-    combined = concatenate_datasets([gsm8k_train, math_train])
-
-    if max_size and len(combined) > max_size:
-        combined = combined.shuffle(seed=seed).select(range(max_size))
-
-    return combined
+def _load_jsonl(path: str | Path) -> Dataset:
+    return load_dataset("json", data_files=str(path), split="train")
 
 
 def preprocess_all(raw_dir: str | Path, processed_dir: str | Path) -> dict:
-    """Load raw datasets, preprocess, and save to processed_dir.
-
-    Returns dict with all processed datasets.
-    """
+    """Load raw datasets, preprocess, and save as JSONL to processed_dir."""
     raw_dir = Path(raw_dir)
     processed_dir = Path(processed_dir)
     processed_dir.mkdir(parents=True, exist_ok=True)
 
-    # Load raw datasets
-    gsm8k = load_from_disk(str(raw_dir / "gsm8k"))
+    # Load and preprocess GSM8K
+    gsm8k_train = preprocess_gsm8k(_load_jsonl(raw_dir / "gsm8k_train.jsonl"))
+    gsm8k_test = preprocess_gsm8k(_load_jsonl(raw_dir / "gsm8k_test.jsonl"))
 
-    # Preprocess
-    gsm8k_train = preprocess_gsm8k(gsm8k["train"])
-    gsm8k_test = preprocess_gsm8k(gsm8k["test"])
-
-    # Use GSM8K as the combined training set (MATH dataset unavailable)
-    train_combined = gsm8k_train
-
-    # Save
     result = {
         "gsm8k_train": gsm8k_train,
         "gsm8k_test": gsm8k_test,
-        "train_combined": train_combined,
+        "train_combined": gsm8k_train,
     }
 
     # Load MATH-500 if available
-    math500_path = raw_dir / "math500"
+    math500_path = raw_dir / "math500_test.jsonl"
     if math500_path.exists():
-        math500 = load_from_disk(str(math500_path))
-        math500_test = preprocess_math500(math500["test"])
+        math500_test = preprocess_math500(_load_jsonl(math500_path))
         result["math500_test"] = math500_test
 
+    # Save all as JSONL
     for name, ds in result.items():
-        ds.save_to_disk(str(processed_dir / name))
+        ds.to_json(str(processed_dir / f"{name}.jsonl"))
 
     from rich.console import Console
-
     console = Console()
     console.print("[bold green]Preprocessing complete![/bold green]")
     for name, ds in result.items():
