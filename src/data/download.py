@@ -59,18 +59,14 @@ def download_all_datasets(output_dir: str | Path) -> dict:
     console.print("[bold]Downloading GSM8K...[/bold]")
     gsm8k = download_gsm8k(output_dir)
 
-    console.print("[bold]Downloading MATH...[/bold]")
-    math = download_math(output_dir)
-
     console.print("[bold]Downloading MATH-500...[/bold]")
     math500 = download_math500(output_dir)
 
-    console.print("[bold green]All datasets downloaded successfully![/bold green]")
+    console.print("[bold green]Datasets downloaded successfully![/bold green]")
     console.print(f"  GSM8K:   train={len(gsm8k['train'])}, test={len(gsm8k['test'])}")
-    console.print(f"  MATH:    train={len(math['train'])}, test={len(math['test'])}")
     console.print(f"  MATH-500: test={len(math500['test'])}")
 
-    return {"gsm8k": gsm8k, "math": math, "math500": math500}
+    return {"gsm8k": gsm8k, "math500": math500}
 
 
 if __name__ == "__main__":
