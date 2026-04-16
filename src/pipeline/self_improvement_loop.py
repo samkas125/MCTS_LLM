@@ -24,7 +24,7 @@ from datasets import Dataset
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-from src.data.mcts_dataset import save_mcts_traces
+from src.data.mcts_dataset import load_mcts_traces, save_mcts_traces
 from src.evaluation.evaluator import async_evaluate_model, evaluate_model, save_eval_results
 from src.evaluation.metrics import compute_improvement, format_results_table
 from src.inference.vllm_client import VLLMClient
@@ -118,6 +118,7 @@ class SelfImprovementLoop:
         vllm_base_url: str = "http://localhost:8000/v1",
         reward_weights: list[float] | None = None,
         problems_per_round: int = 500,
+        skip_mcts: bool = False,
         **kwargs,
     ):
         self.base_model = base_model
@@ -129,6 +130,7 @@ class SelfImprovementLoop:
         self.vllm_base_url = vllm_base_url
         self.reward_weights = reward_weights or [1.0, 0.1, 0.5]
         self.problems_per_round = problems_per_round
+        self.skip_mcts = skip_mcts
         self.results_log: list[dict] = []
 
     async def run(self, start_round: int = 0) -> list[dict]:
@@ -159,21 +161,29 @@ class SelfImprovementLoop:
             else:
                 train_problems = full_train
 
-            # Start vLLM server once — shared by pre-eval + MCTS
-            _start_vllm_server(self.current_model)
-            try:
-                # Phase 1: Evaluate current model (reuses running server)
-                console.print("[yellow]Phase 1: Pre-training evaluation[/yellow]")
-                pre_results = await async_evaluate_model(
-                    self.current_model, gsm8k_test, math500_test,
-                    vllm_base_url=self.vllm_base_url,
-                )
+            if self.skip_mcts:
+                # Load existing traces from disk, skip eval+MCTS entirely
+                traces_path = self.data_dir / f"mcts_traces/round_{round_num}"
+                console.print(f"[yellow]Skipping MCTS — loading traces from {traces_path}[/yellow]")
+                mcts_traces = load_mcts_traces(traces_path)
+                console.print(f"Loaded {len(mcts_traces)} problem traces")
+                pre_results = {}
+            else:
+                # Start vLLM server once — shared by pre-eval + MCTS
+                _start_vllm_server(self.current_model)
+                try:
+                    # Phase 1: Evaluate current model (reuses running server)
+                    console.print("[yellow]Phase 1: Pre-training evaluation[/yellow]")
+                    pre_results = await async_evaluate_model(
+                        self.current_model, gsm8k_test, math500_test,
+                        vllm_base_url=self.vllm_base_url,
+                    )
 
-                # Phase 2: MCTS data generation
-                console.print("[yellow]Phase 2: MCTS data generation[/yellow]")
-                mcts_traces = await self._run_mcts_phase(train_problems, round_num)
-            finally:
-                _stop_vllm_server()
+                    # Phase 2: MCTS data generation
+                    console.print("[yellow]Phase 2: MCTS data generation[/yellow]")
+                    mcts_traces = await self._run_mcts_phase(train_problems, round_num)
+                finally:
+                    _stop_vllm_server()
 
             # Phase 3: GRPO training (needs GPU free — vLLM must be stopped)
             console.print("[yellow]Phase 3: GRPO training[/yellow]")

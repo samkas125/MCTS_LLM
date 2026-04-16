@@ -33,6 +33,8 @@ def main():
     parser.add_argument("--problems-per-round", type=int, default=100,
                         help="Problems to run MCTS on per round")
     parser.add_argument("--round", type=int, default=None, help="Run only this round")
+    parser.add_argument("--skip-mcts", action="store_true",
+                        help="Skip MCTS and load existing traces from disk")
 
     args = parser.parse_args()
 
@@ -49,6 +51,7 @@ def main():
         output_dir=args.output_dir,
         vllm_base_url=args.vllm_url,
         problems_per_round=args.problems_per_round,
+        skip_mcts=args.skip_mcts,
     )
 
     logger.info(f"Self-improvement loop complete. {len(results)} rounds executed.")
